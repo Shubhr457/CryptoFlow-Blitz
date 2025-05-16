@@ -53,6 +53,18 @@ export const setBudget = async (amount) => {
     return { success: true, signature: tx, amount: amount };
   } catch (error) {
     console.error('Error setting budget:', error);
+    
+    // Check if the error is about the transaction already being processed
+    if (error.message && error.message.includes('already been processed')) {
+      // This is actually a success case - the budget was already set
+      return { 
+        success: true, 
+        signature: 'already-processed', 
+        amount: amount,
+        note: 'Budget was already set with this amount'
+      };
+    }
+    
     return { success: false, error: error.message };
   }
 };
