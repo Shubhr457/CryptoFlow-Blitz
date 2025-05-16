@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { executePayment, getOrganizationPDA, getDepartmentPDA, getPaymentPDA } from '../solana/api';
+import { PublicKey } from '@solana/web3.js';
 
 export const ExecutePayment = () => {
   const { publicKey } = useWallet();
@@ -17,37 +18,93 @@ export const ExecutePayment = () => {
       
       setLoadingPayments(true);
       try {
+        // Get organization PDA - this will now use mock data if there's an error
         const organizationPDA = await getOrganizationPDA(publicKey);
         
-        // For demonstration, we're creating mock payment data
-        // In a real app, you would query all payments from the blockchain
-        const engineeringDeptPDA = await getDepartmentPDA(organizationPDA, 'Engineering');
-        const marketingDeptPDA = await getDepartmentPDA(organizationPDA, 'Marketing');
+        // Initialize mock payments array
+        const mockPayments = [];
         
-        const mockPayments = [
-          { 
+        // Try to create Engineering department payment
+        try {
+          const engineeringDeptPDA = await getDepartmentPDA(organizationPDA, 'Engineering');
+          const engineeringPaymentPDA = await getPaymentPDA(engineeringDeptPDA, 1);
+          
+          mockPayments.push({ 
             id: 1, 
             department: 'Engineering',
             departmentPDA: engineeringDeptPDA,
             amount: 1000,
             recipient: '5YNmS1R9nNSCDzb5a7mMJ1dwK9uHeAAF4CmPjJegjYs7',
             executionDate: new Date().toLocaleDateString(),
-            paymentPDA: await getPaymentPDA(engineeringDeptPDA, 1)
-          },
-          { 
+            paymentPDA: engineeringPaymentPDA
+          });
+        } catch (e) { console.warn('Error creating Engineering payment:', e); }
+        
+        // Try to create Marketing department payment
+        try {
+          const marketingDeptPDA = await getDepartmentPDA(organizationPDA, 'Marketing');
+          const marketingPaymentPDA = await getPaymentPDA(marketingDeptPDA, 2);
+          
+          mockPayments.push({ 
             id: 2, 
             department: 'Marketing',
             departmentPDA: marketingDeptPDA,
             amount: 2000,
             recipient: '5YNmS1R9nNSCDzb5a7mMJ1dwK9uHeAAF4CmPjJegjYs7',
             executionDate: new Date().toLocaleDateString(),
-            paymentPDA: await getPaymentPDA(marketingDeptPDA, 2)
-          }
-        ];
+            paymentPDA: marketingPaymentPDA
+          });
+        } catch (e) { console.warn('Error creating Marketing payment:', e); }
         
-        setPayments(mockPayments);
+        // Only set payments if we have at least one
+        if (mockPayments.length > 0) {
+          setPayments(mockPayments);
+        } else {
+          // Fallback to hardcoded mock data if all payment creation fails
+          setPayments([
+            { 
+              id: 1, 
+              department: 'Engineering',
+              departmentPDA: new PublicKey('3x4q2vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyw'),
+              amount: 1000,
+              recipient: '5YNmS1R9nNSCDzb5a7mMJ1dwK9uHeAAF4CmPjJegjYs7',
+              executionDate: new Date().toLocaleDateString(),
+              paymentPDA: new PublicKey('4x5q3vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyx')
+            },
+            { 
+              id: 2, 
+              department: 'Marketing',
+              departmentPDA: new PublicKey('3x4q2vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyw'),
+              amount: 2000,
+              recipient: '5YNmS1R9nNSCDzb5a7mMJ1dwK9uHeAAF4CmPjJegjYs7',
+              executionDate: new Date().toLocaleDateString(),
+              paymentPDA: new PublicKey('4x5q3vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyx')
+            }
+          ]);
+        }
       } catch (error) {
         console.error('Error fetching payments:', error);
+        // Fallback to hardcoded mock data if all fails
+        setPayments([
+          { 
+            id: 1, 
+            department: 'Engineering',
+            departmentPDA: new PublicKey('3x4q2vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyw'),
+            amount: 1000,
+            recipient: '5YNmS1R9nNSCDzb5a7mMJ1dwK9uHeAAF4CmPjJegjYs7',
+            executionDate: new Date().toLocaleDateString(),
+            paymentPDA: new PublicKey('4x5q3vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyx')
+          },
+          { 
+            id: 2, 
+            department: 'Marketing',
+            departmentPDA: new PublicKey('3x4q2vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyw'),
+            amount: 2000,
+            recipient: '5YNmS1R9nNSCDzb5a7mMJ1dwK9uHeAAF4CmPjJegjYs7',
+            executionDate: new Date().toLocaleDateString(),
+            paymentPDA: new PublicKey('4x5q3vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyx')
+          }
+        ]);
       } finally {
         setLoadingPayments(false);
       }
