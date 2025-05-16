@@ -1,81 +1,9 @@
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import * as anchor from '@project-serum/anchor';
-import { getProgram } from './config';
+import { getProgram, getOrganizationPDA, getDepartmentPDA, getPaymentPDA, getNotificationPDA } from './config';
 
-// Mock PDA generation for development purposes
-export const getOrganizationPDA = async (authority) => {
-  try {
-    // Try to use the real implementation if possible
-    const [organizationPDA] = await PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('organization'),
-        authority.toBuffer()
-      ],
-      getProgram().programId
-    );
-    return organizationPDA;
-  } catch (error) {
-    console.warn('Using mock PDA for organization due to:', error.message);
-    // Return a mock PDA for development purposes
-    return new PublicKey('2x3q1vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyv');
-  }
-};
-
-export const getDepartmentPDA = async (organization, name) => {
-  try {
-    // Try to use the real implementation if possible
-    const [departmentPDA] = await PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('department'),
-        organization.toBuffer(),
-        Buffer.from(name)
-      ],
-      getProgram().programId
-    );
-    return departmentPDA;
-  } catch (error) {
-    console.warn('Using mock PDA for department due to:', error.message);
-    // Return a mock PDA for development purposes
-    return new PublicKey('3x4q2vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyw');
-  }
-};
-
-export const getPaymentPDA = async (department, paymentId) => {
-  try {
-    // Try to use the real implementation if possible
-    const [paymentPDA] = await PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('payment'),
-        department.toBuffer(),
-        new anchor.BN(paymentId).toArrayLike(Buffer, 'le', 8)
-      ],
-      getProgram().programId
-    );
-    return paymentPDA;
-  } catch (error) {
-    console.warn('Using mock PDA for payment due to:', error.message);
-    // Return a mock PDA for development purposes
-    return new PublicKey('4x5q3vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyx');
-  }
-};
-
-export const getNotificationPDA = async (payment) => {
-  try {
-    // Try to use the real implementation if possible
-    const [notificationPDA] = await PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('notification'),
-        payment.toBuffer()
-      ],
-      getProgram().programId
-    );
-    return notificationPDA;
-  } catch (error) {
-    console.warn('Using mock PDA for notification due to:', error.message);
-    // Return a mock PDA for development purposes
-    return new PublicKey('5x6q4vagcURyJb9Y7nbXYFieUVnREKrfRVKmSmM6HQyz');
-  }
-};
+// Re-export PDA functions for backward compatibility
+export { getOrganizationPDA, getDepartmentPDA, getPaymentPDA, getNotificationPDA };
 
 // Initialize organization
 export const initializeOrganization = async () => {
@@ -95,7 +23,7 @@ export const initializeOrganization = async () => {
       .rpc();
     
     console.log('Organization initialized. Transaction signature:', tx);
-    return { success: true, signature: tx };
+    return { success: true, signature: tx, organizationPDA };
   } catch (error) {
     console.error('Error initializing organization:', error);
     return { success: false, error: error.message };
@@ -110,8 +38,11 @@ export const setBudget = async (amount) => {
     
     const organizationPDA = await getOrganizationPDA(wallet.publicKey);
     
+    // Convert amount to BN (BigNumber) as required by Anchor
+    const bnAmount = new anchor.BN(amount);
+    
     const tx = await program.methods
-      .setBudget(new anchor.BN(amount))
+      .setBudget(bnAmount)
       .accounts({
         organization: organizationPDA,
         authority: wallet.publicKey
@@ -119,7 +50,7 @@ export const setBudget = async (amount) => {
       .rpc();
     
     console.log('Budget set. Transaction signature:', tx);
-    return { success: true, signature: tx };
+    return { success: true, signature: tx, amount: amount };
   } catch (error) {
     console.error('Error setting budget:', error);
     return { success: false, error: error.message };
@@ -135,8 +66,11 @@ export const createDepartment = async (name, budgetAllocation) => {
     const organizationPDA = await getOrganizationPDA(wallet.publicKey);
     const departmentPDA = await getDepartmentPDA(organizationPDA, name);
     
+    // Convert budget to BN
+    const bnBudget = new anchor.BN(budgetAllocation);
+    
     const tx = await program.methods
-      .createDepartment(name, new anchor.BN(budgetAllocation))
+      .createDepartment(name, bnBudget)
       .accounts({
         organization: organizationPDA,
         department: departmentPDA,
@@ -162,13 +96,19 @@ export const schedulePayment = async (departmentPDA, amount, recipient, memo, ex
     const organizationPDA = await getOrganizationPDA(wallet.publicKey);
     const paymentPDA = await getPaymentPDA(departmentPDA, paymentId);
     
+    // Validate and convert inputs to appropriate types
+    const recipientPubkey = new PublicKey(recipient);
+    const bnAmount = new anchor.BN(amount);
+    const bnExecutionDate = new anchor.BN(executionDate);
+    const bnPaymentId = new anchor.BN(paymentId);
+    
     const tx = await program.methods
       .schedulePayment(
-        new anchor.BN(amount),
-        new PublicKey(recipient),
+        bnAmount,
+        recipientPubkey,
         memo,
-        new anchor.BN(executionDate),
-        new anchor.BN(paymentId)
+        bnExecutionDate,
+        bnPaymentId
       )
       .accounts({
         organization: organizationPDA,
@@ -220,25 +160,13 @@ export const executePayment = async (departmentPDA, paymentPDA) => {
 export const markNotificationRead = async (notificationPDA) => {
   try {
     const program = getProgram();
-    
-    // Check if provider and wallet exist
-    if (!program.provider || !program.provider.wallet) {
-      console.warn('Provider or wallet is undefined, using fallback');
-      // Return mock success response for development purposes
-      return { 
-        success: true, 
-        signature: 'mock-tx-notification-read',
-        mock: true
-      };
-    }
-    
     const wallet = program.provider.wallet;
     
     const tx = await program.methods
       .markNotificationRead()
       .accounts({
         notification: notificationPDA,
-        authority: wallet.publicKey
+        authority: wallet.publicKey,
       })
       .rpc();
     
@@ -246,12 +174,9 @@ export const markNotificationRead = async (notificationPDA) => {
     return { success: true, signature: tx };
   } catch (error) {
     console.error('Error marking notification as read:', error);
-    // Return mock success for development if there's an error
-    return { 
-      success: true, 
-      signature: 'mock-tx-notification-read-fallback',
-      mock: true,
-      originalError: error.message
+    return {
+      success: false,
+      error: error.message
     };
   }
 };
